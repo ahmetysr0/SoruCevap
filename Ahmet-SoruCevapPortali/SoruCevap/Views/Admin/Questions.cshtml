@@ -1,0 +1,337 @@
+@model List<Question>
+@{
+    ViewData["Title"] = "Admin Dashboard";
+    Layout = "~/Views/Shared/_adminLayout.cshtml";
+}
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-question-circle"></i> Tüm Sorular
+            </h5>
+        </div>
+        <div class="card-body">
+            <table id="questionsTable" class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Başlık</th>
+                        <th>Kategori</th>
+                        <th>Yazar</th>
+                        <th>Tarih</th>
+                        <th>Durum</th>
+                        <th>Cevaplar</th>
+                        <th>Görüntülenme</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var question in Model)
+                    {
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">@question.Title</h6>
+                                        @if (question.Status == QuestionStatus.Rejected)
+                                        {
+                                            <small class="text-danger cursor-pointer" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="@question.RejectionReason">
+                                                <i class="fas fa-info-circle"></i> Red Nedeni
+                                            </small>
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">
+                                    @question.Category?.Name
+                                </span>
+                            </td>
+                            <td>@question.CreatedBy?.UserName</td>
+                            <td data-order="@question.CreatedAt.Ticks">
+                                @question.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                            </td>
+                            <td>
+                                @{
+                                    var (badgeClass, statusText) = question.Status switch
+                                    {
+                                        QuestionStatus.Pending => ("bg-warning", "Bekliyor"),
+                                        QuestionStatus.Approved => ("bg-success", "Onaylandı"),
+                                        QuestionStatus.Rejected => ("bg-danger", "Reddedildi"),
+                                        _ => ("bg-secondary", "Bilinmiyor")
+                                    };
+                                }
+                                <span class="badge @badgeClass">@statusText</span>
+                            </td>
+                            <td>
+                                <span >
+                                    @question.Answers?.Count cevap
+                                </span>
+                            </td>
+                            <td>
+                                <span >
+                                    @question.ViewCount görüntülenme
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-primary"
+                                            onclick="showDetailModal('question', @question.Id)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    @if (question.Status == QuestionStatus.Pending)
+                                    {
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-success"
+                                                onclick="approveQuestion(@question.Id)">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick="rejectQuestion(@question.Id)">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    }
+                                    
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Soru ve Cevap Detay Modalı -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-question-circle me-2"></i>
+                    <span id="modalTitle"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="content-wrapper">
+                    <!-- Yazar Bilgisi -->
+                    <div class="author-info d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <i class="fas fa-user-circle text-primary me-2"></i>
+                            <span id="modalAuthor" class="fw-bold"></span>
+                            <small class="text-muted ms-2" id="modalDate"></small>
+                        </div>
+                        <div id="modalCategoryDiv">
+                            <span class="badge bg-info" id="modalCategory"></span>
+                        </div>
+                    </div>
+
+                    <!-- İçerik -->
+                    <div id="modalContent" class="mb-4 pb-3 border-bottom"></div>
+
+                    <!-- Cevaplar Bölümü -->
+                    <div id="answersSection" class="mt-4">
+                        <h6 class="answers-title mb-3">
+                            <i class="fas fa-comments me-2"></i>
+                            Cevaplar (<span id="answerCount">0</span>)
+                        </h6>
+                        <div id="answersList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Tooltips'i aktifleştir
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+
+            // DataTable'ı başlat
+            $('#questionsTable').DataTable({
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json'
+                },
+                order: [[3, 'desc']], // Tarihe göre sırala
+                responsive: true
+            });
+        });
+
+        function approveQuestion(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu soru onaylanacak!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, onayla!',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/ReviewQuestion', { 
+                        id: id, 
+                        approved: true 
+                    })
+                    .done(function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            location.reload();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    });
+                }
+            });
+        }
+
+        function rejectQuestion(id) {
+            Swal.fire({
+                title: 'Red Nedeni',
+                input: 'text',
+                inputPlaceholder: 'Red nedenini yazın...',
+                showCancelButton: true,
+                confirmButtonText: 'Reddet',
+                cancelButtonText: 'İptal',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Red nedeni yazmalısınız!'
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/ReviewQuestion', { 
+                        id: id, 
+                        approved: false,
+                        rejectionReason: result.value
+                    })
+                    .done(function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            location.reload();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    });
+                }
+            });
+        }
+
+        function deleteQuestion(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu soru kalıcı olarak silinecek!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, sil!',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/DeleteQuestion', { id: id })
+                    .done(function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            location.reload();
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    });
+                }
+            });
+        }
+
+        function showDetailModal(type, id) {
+            $.get(`/Admin/GetQuestionDetails/${id}`, function(data) {
+                // Modal başlığı
+                $('#modalTitle').text(data.title || 'Cevap Detayı');
+                
+                // Yazar ve tarih
+                $('#modalAuthor').text(data.createdBy.userName);
+                $('#modalDate').text(new Date(data.createdAt).toLocaleString('tr-TR'));
+                
+                // Kategori
+                $('#modalCategoryDiv').show();
+                $('#modalCategory').text(data.category.name);
+                
+                // İçerik
+                $('#modalContent').html(data.content);
+                
+                // Cevaplar
+                if (data.answers) {
+                    $('#answersSection').show();
+                    $('#answerCount').text(data.answers.length);
+                    
+                    const answersHtml = data.answers.map(answer => `
+                        <div class="answer-item ${answer.isAccepted ? 'accepted-answer' : ''}">
+                            <div class="answer-content">${answer.content}</div>
+                            <div class="answer-meta mt-2">
+                                <i class="fas fa-user-circle"></i> ${answer.createdBy.userName} 
+                                <i class="fas fa-clock ms-2"></i> ${new Date(answer.createdAt).toLocaleString('tr-TR')}
+                                ${answer.isAccepted ? '<span class="badge bg-success ms-2"><i class="fas fa-check"></i> Kabul Edildi</span>' : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    $('#answersList').html(answersHtml);
+                } else {
+                    $('#answersSection').hide();
+                }
+                
+                // Modalı göster
+                $('#detailModal').modal('show');
+            });
+        }
+    </script>
+}
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+
+    .modal-body {
+        max-height: 70vh;
+    }
+
+    .content-wrapper {
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    .content-wrapper img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .answer-item {
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        margin-bottom: 15px;
+    }
+
+    .answer-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .answer-meta {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .accepted-answer {
+        border-left: 4px solid #28a745;
+    }
+</style> 

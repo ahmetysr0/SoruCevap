@@ -1,0 +1,248 @@
+@model IEnumerable<Question>
+@{
+    ViewData["Title"] = "Bekleyen Sorular";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Bekleyen Sorular</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="pendingQuestionsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Başlık</th>
+                        <th>Kategori</th>
+                        <th>Kullanıcı</th>
+                        <th>Tarih</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var question in Model)
+                    {
+                        <tr>
+                            <td>@question.Id</td>
+                            <td>@question.Title</td>
+                            <td>@question.Category.Name</td>
+                            <td>@question.CreatedBy.UserName</td>
+                            <td>@question.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewQuestion(@question.Id)">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-success" onclick="approveQuestion(@question.Id)">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="rejectQuestion(@question.Id)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Soru Detay Modalı -->
+<div class="modal fade" id="questionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-question-circle me-2"></i>
+                    <span id="questionTitle"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="question-details">
+                    <!-- Üst Bilgi -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="user-info">
+                            <i class="fas fa-user-circle text-primary me-2"></i>
+                            <span id="userName" class="fw-bold"></span>
+                            <small class="text-muted ms-2" id="questionDate"></small>
+                        </div>
+                        <div class="category-badge">
+                            <span class="badge bg-info" id="categoryName"></span>
+                        </div>
+                    </div>
+
+                    <!-- İçerik -->
+                    <div class="question-content mb-4">
+                        <div id="questionContent" class="border-bottom pb-3"></div>
+                    </div>
+
+                    <!-- Etiketler -->
+                    <div class="tags mb-3" id="questionTags"></div>
+
+                    <!-- İstatistikler -->
+                    <div class="stats d-flex gap-3 text-muted small">
+                        <span>
+                            <i class="fas fa-eye"></i>
+                            <span id="viewCount">0</span> görüntülenme
+                        </span>
+                        <span>
+                            <i class="fas fa-comments"></i>
+                            <span id="answerCount">0</span> cevap
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" onclick="approveFromModal()">
+                    <i class="fas fa-check me-2"></i>Onayla
+                </button>
+                <button type="button" class="btn btn-danger" onclick="rejectFromModal()">
+                    <i class="fas fa-times me-2"></i>Reddet
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.question-content {
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.question-content img {
+    max-width: 100%;
+    height: auto;
+}
+
+.tags .badge {
+    margin-right: 5px;
+    font-size: 0.85em;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+}
+
+.stats i {
+    margin-right: 5px;
+}
+</style>
+
+<script>
+let currentQuestionId = null;
+
+function viewQuestion(id) {
+    currentQuestionId = id;
+    
+    // AJAX isteği ile soru detaylarını al
+    $.get(`/Admin/GetQuestionDetails/${id}`, function(data) {
+        // Modal başlığı
+        $('#questionTitle').text(data.title);
+        
+        // Kullanıcı bilgileri (avatar kaldırıldı)
+        $('#userName').text(data.createdBy.userName);
+        
+        // Tarih
+        const date = new Date(data.createdAt);
+        $('#questionDate').text(date.toLocaleString('tr-TR'));
+        
+        // Kategori
+        $('#categoryName').text(data.category.name);
+        
+        // İçerik
+        $('#questionContent').html(data.content);
+        
+        // Etiketler
+        const tagsHtml = data.tags?.map(tag => 
+            `<span class="badge badge-success">${tag}</span>`
+        ).join('') || '';
+        $('#questionTags').html(tagsHtml);
+        
+        // İstatistikler
+        $('#viewCount').text(data.viewCount);
+        $('#answerCount').text(data.answers?.length || 0);
+        
+        // Modalı göster
+        $('#questionDetailModal').modal('show');
+    });
+}
+
+function approveFromModal() {
+    if (currentQuestionId) {
+        approveQuestion(currentQuestionId);
+        $('#questionDetailModal').modal('hide');
+    }
+}
+
+function rejectFromModal() {
+    if (currentQuestionId) {
+        rejectQuestion(currentQuestionId);
+        $('#questionDetailModal').modal('hide');
+    }
+}
+
+function approveQuestion(id) {
+    Swal.fire({
+        title: 'Emin misiniz?',
+        text: "Bu soru onaylanacak!",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Evet, onayla!',
+        cancelButtonText: 'İptal'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.post('/Admin/ReviewQuestion', { id: id, approved: true }, function(response) {
+                if (response.success) {
+                    Swal.fire('Başarılı!', response.message, 'success')
+                        .then(() => location.reload());
+                }
+            });
+        }
+    });
+}
+
+function rejectQuestion(id) {
+    Swal.fire({
+        title: 'Red Sebebi',
+        input: 'text',
+        inputPlaceholder: 'Red sebebini yazın...',
+        showCancelButton: true,
+        confirmButtonText: 'Reddet',
+        cancelButtonText: 'İptal',
+        showLoaderOnConfirm: true,
+        preConfirm: (reason) => {
+            return $.post('/Admin/ReviewQuestion', 
+                { id: id, approved: false, rejectionReason: reason }
+            ).then(response => {
+                if (!response.success) {
+                    throw new Error(response.message)
+                }
+                return response
+            })
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire('Başarılı!', 'Soru reddedildi.', 'success')
+                .then(() => location.reload());
+        }
+    });
+}
+
+$(document).ready(function() {
+    $('#pendingQuestionsTable').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Turkish.json"
+        }
+    });
+});
+</script> 

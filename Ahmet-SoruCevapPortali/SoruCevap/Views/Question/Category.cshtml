@@ -1,0 +1,110 @@
+@model CategoryViewModel
+
+<div class="container mt-4">
+    <!-- Kategori Başlık Kartı -->
+    <div class="card mb-4 bg-primary text-white">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-2 text-center">
+                    <img src="@(string.IsNullOrEmpty(Model.Category.ImageUrl) ? "/images/default-category.png" : Model.Category.ImageUrl)" 
+                         class="rounded-circle img-fluid" 
+                         style="width: 150px; height: 150px; object-fit: cover;"
+                         alt="@Model.Category.Name">
+                </div>
+                <div class="col-md-10">
+                    <h1 class="display-4">@Model.Category.Name</h1>
+                    <p class="lead mb-0">@Model.Category.Description</p>
+                    <div class="mt-3">
+                        <span class="badge bg-light text-primary">
+                            <i class="fas fa-question-circle"></i> @Model.Category.Questions?.Count soru
+                        </span>
+                        @if (User.Identity.IsAuthenticated)
+                        {
+                            <a href="/Question" class="btn btn-light ms-2">
+                                <i class="fas fa-plus-circle"></i> Bu Kategoride Soru Sor
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sorular -->
+    <div class="card">
+        <div class="card-header bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list"></i> Sorular</h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sortQuestions('newest')">
+                        <i class="fas fa-clock"></i> En Yeni
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sortQuestions('mostViewed')">
+                        <i class="fas fa-eye"></i> En Çok Görüntülenen
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="sortQuestions('mostAnswered')">
+                        <i class="fas fa-comments"></i> En Çok Cevaplanan
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="list-group list-group-flush" id="questionsList">
+            @foreach (var question in Model.Questions)
+            {
+                <div class="list-group-item question-item" 
+                     data-date="@question.CreatedAt.Ticks"
+                     data-views="@question.ViewCount"
+                     data-answers="@(question.Answers?.Count ?? 0)">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="/Question/Details/@question.Id" class="text-decoration-none">
+                                <h5 class="mb-1">@question.Title</h5>
+                            </a>
+                            <small class="text-muted">
+                                <i class="fas fa-user"></i> @question.CreatedBy?.UserName |
+                                <i class="fas fa-calendar"></i> @question.CreatedAt.ToString("dd.MM.yyyy HH:mm") |
+                                <i class="fas fa-comments"></i> @question.Answers?.Count cevap |
+                                <i class="fas fa-eye"></i> @question.ViewCount görüntülenme
+                            </small>
+                        </div>
+                        <span class="badge bg-@(question.Answers?.Any(a => a.IsAccepted) == true ? "success" : "primary") rounded-pill">
+                            @(question.Answers?.Any(a => a.IsAccepted) == true ? "Çözüldü" : "Çözülmedi")
+                        </span>
+                    </div>
+                    <p class="mb-1 mt-2">@Html.Raw(question.Content.Length > 200 ? question.Content.Substring(0, 200) + "..." : question.Content)</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .question-item {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .question-item:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+    }
+</style>
+
+<script>
+    function sortQuestions(type) {
+        const questionsList = document.getElementById('questionsList');
+        const questions = Array.from(questionsList.getElementsByClassName('question-item'));
+
+        questions.sort((a, b) => {
+            switch(type) {
+                case 'newest':
+                    return b.dataset.date - a.dataset.date;
+                case 'mostViewed':
+                    return b.dataset.views - a.dataset.views;
+                case 'mostAnswered':
+                    return b.dataset.answers - a.dataset.answers;
+            }
+        });
+
+        questions.forEach(question => questionsList.appendChild(question));
+    }
+</script> 

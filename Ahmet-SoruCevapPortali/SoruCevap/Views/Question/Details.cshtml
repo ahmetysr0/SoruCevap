@@ -1,0 +1,462 @@
+@using System.Security.Claims
+@model Question
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
+
+<style>
+    .ck-editor__editable {
+        min-height: 200px;
+        max-height: 400px;
+    }
+
+    .ck-editor__editable_inline {
+        padding: 0 10px;
+    }
+
+    /* Code block için özel stil */
+    .ck-content pre {
+        background: #f8f9fa;
+        padding: 1em;
+        border-radius: 4px;
+        margin: 1em 0;
+    }
+
+    .ck-content code {
+        font-family: 'Courier New', Courier, monospace;
+        background: #f8f9fa;
+        padding: 2px 4px;
+        border-radius: 2px;
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">@Model.Title</h5>
+            <span class="badge bg-primary">@Model.Category.Name</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-3">
+                <div>
+                    <small class="text-muted">
+                        <i class="fas fa-user"></i> @Model.CreatedBy.UserName
+                    </small>
+                    <small class="text-muted ms-3">
+                        <i class="fas fa-calendar"></i> @Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                    </small>
+                </div>
+                <div>
+                    <small class="text-muted">
+                        <i class="fas fa-eye"></i> @Model.ViewCount görüntülenme
+                    </small>
+                </div>
+            </div>
+            <div class="question-content">
+                @Html.Raw(Model.Content)
+            </div>
+            @if (!string.IsNullOrEmpty(Model.Tags))
+            {
+                <div class="mt-3">
+                    @foreach (var tag in Model.Tags.Split(','))
+                    {
+                        <span class="badge bg-secondary me-1">@tag.Trim()</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Cevaplar -->
+    <h5 class="mb-3">
+        Cevaplar
+        <span class="badge bg-secondary">@Model.Answers.Count</span>
+    </h5>
+
+    <div id="answersContainer">
+        @foreach (var answer in Model.Answers.OrderByDescending(a => a.IsAccepted).ThenByDescending(a => a.CreatedAt))
+        {
+            <div class="card mb-3 @(answer.IsAccepted ? "border-success" : "")" id="answer-@answer.Id">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <small class="text-muted">
+                                <i class="fas fa-user"></i> @answer.CreatedBy.UserName
+                            </small>
+                            <small class="text-muted ms-2">
+                                <i class="fas fa-calendar"></i> @answer.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                            </small>
+                        </div>
+                        <div>
+                            @if (answer.IsAccepted)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check"></i> Kabul Edildi
+                                    <small class="ms-1">(@answer.AcceptedAt?.ToString("dd.MM.yyyy HH:mm"))</small>
+                                </span>
+                            }
+                            else if (Model.CreatedById == User.FindFirstValue(ClaimTypes.NameIdentifier))
+                            {
+                                <button class="btn btn-sm btn-success" onclick="acceptAnswer(@answer.Id)">
+                                    <i class="fas fa-check"></i> Kabul Et
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="answer-content">
+                        @Html.Raw(answer.Content)
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Cevap Ekleme Formu -->
+    @if (User.Identity.IsAuthenticated)
+    {
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">Cevap Yaz</h6>
+            </div>
+            <div class="card-body">
+                <form id="answerForm" method="post" asp-action="AddAnswer">
+                    <input type="hidden" name="questionId" value="@Model.Id" />
+                    <div class="mb-3">
+                        <div id="editor-container">
+                            <textarea id="answerContent" name="content" class="form-control"></textarea>
+                        </div>
+                        <div id="content-error" class="invalid-feedback" style="display: none;">
+                            Lütfen bir cevap yazın.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Gönder
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Cevap yazabilmek için lütfen <a asp-controller="User" asp-action="Login">giriş yapın</a>.
+        </div>
+    }
+</div>
+
+<!-- Soru ve Cevap Detay Modalı -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-question-circle me-2"></i>
+                    <span id="modalTitle"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="content-wrapper">
+                    <!-- Yazar Bilgisi -->
+                    <div class="author-info d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <i class="fas fa-user-circle text-primary me-2"></i>
+                            <span id="modalAuthor" class="fw-bold"></span>
+                            <small class="text-muted ms-2" id="modalDate"></small>
+                        </div>
+                        <div id="modalCategoryDiv">
+                            <span class="badge bg-info" id="modalCategory"></span>
+                        </div>
+                    </div>
+
+                    <!-- İçerik -->
+                    <div id="modalContent" class="mb-4 pb-3 border-bottom"></div>
+
+                    <!-- Cevaplar Bölümü -->
+                    <div id="answersSection" class="mt-4">
+                        <h6 class="answers-title mb-3">
+                            <i class="fas fa-comments me-2"></i>
+                            Cevaplar (<span id="answerCount">0</span>)
+                        </h6>
+                        <div id="answersList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .modal-body {
+        max-height: 70vh;
+    }
+
+    .content-wrapper {
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+        .content-wrapper img {
+            max-width: 100%;
+            height: auto;
+        }
+
+    .answer-item {
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        margin-bottom: 15px;
+    }
+
+        .answer-item:last-child {
+            margin-bottom: 0;
+        }
+
+    .answer-meta {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .accepted-answer {
+        border-left: 4px solid #28a745;
+    }
+</style>
+
+<script>
+    function showDetailModal(type, id) {
+        $.get(`/Question/GetDetails/${type}/${id}`, function (data) {
+            // Modal başlığı
+            $('#modalTitle').text(data.title || 'Cevap Detayı');
+
+            // Yazar ve tarih
+            $('#modalAuthor').text(data.createdBy.userName);
+            $('#modalDate').text(new Date(data.createdAt).toLocaleString('tr-TR'));
+
+            // Kategori (sadece sorular için)
+            if (type === 'question') {
+                $('#modalCategoryDiv').show();
+                $('#modalCategory').text(data.category.name);
+            } else {
+                $('#modalCategoryDiv').hide();
+            }
+
+            // İçerik
+            $('#modalContent').html(data.content);
+
+            // Cevaplar (sadece sorular için)
+            if (type === 'question' && data.answers) {
+                $('#answersSection').show();
+                $('#answerCount').text(data.answers.length);
+
+                const answersHtml = data.answers.map(answer => `
+                    <div class="answer-item ${answer.isAccepted ? 'accepted-answer' : ''}">
+                        <div class="answer-content">${answer.content}</div>
+                        <div class="answer-meta mt-2">
+                            <i class="fas fa-user-circle"></i> ${answer.createdBy.userName}
+                            <i class="fas fa-clock ms-2"></i> ${new Date(answer.createdAt).toLocaleString('tr-TR')}
+                            ${answer.isAccepted ? '<span class="badge bg-success ms-2"><i class="fas fa-check"></i> Kabul Edildi</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+                $('#answersList').html(answersHtml);
+            } else {
+                $('#answersSection').hide();
+            }
+
+            // Modalı göster
+            $('#detailModal').modal('show');
+        });
+    }
+
+    function acceptAnswer(answerId) {
+        Swal.fire({
+            title: 'Emin misiniz?',
+            text: "Bu cevabı kabul etmek istediğinize emin misiniz?",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Evet, Kabul Et',
+            cancelButtonText: 'İptal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post('/Question/AcceptAnswer', { answerId: answerId })
+                    .done(function (response) {
+                        if (response.success) {
+                            toastr.success('Cevap başarıyla kabul edildi!');
+                            location.reload(); // Sayfayı yenile
+                        } else {
+                            toastr.error(response.message || 'Bir hata oluştu!');
+                        }
+                    })
+                    .fail(function () {
+                        toastr.error('Bir hata oluştu!');
+                    });
+            }
+        });
+    }
+</script>
+
+@section Scripts {
+    <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/translations/tr.js"></script>
+
+    <script>
+        let editor;
+        let isConnected = false;
+
+        // Bağlantı durumunu kontrol et
+        function checkConnection() {
+            if (connection.state === "Connected") {
+                isConnected = true;
+                joinQuestionGroup();
+            } else {
+                setTimeout(checkConnection, 1000);
+            }
+        }
+
+        // Soru grubuna katıl
+        async function joinQuestionGroup() {
+            try {
+                await connection.invoke("JoinQuestionGroup", "@Model.Id");
+                console.log("Soru grubuna katılındı!");
+            } catch (err) {
+                console.error("Soru grubuna katılırken hata:", err);
+                setTimeout(joinQuestionGroup, 5000);
+            }
+        }
+
+        // Sayfa yüklendiğinde bağlantıyı kontrol et
+        $(document).ready(function () {
+            checkConnection();
+        });
+
+        // CKEditor başlatma
+        ClassicEditor
+            .create(document.querySelector('#answerContent'), {
+                language: 'tr',
+                toolbar: {
+                    items: [
+                        'heading',
+                        '|',
+                        'bold',
+                        'italic',
+                        'link',
+                        'bulletedList',
+                        'numberedList',
+                        '|',
+                        'blockQuote',
+                        'codeBlock'
+                    ]
+                }
+            })
+            .then(newEditor => {
+                editor = newEditor;
+            })
+            .catch(error => {
+                console.error(error);
+            });
+
+        // Yeni cevap geldiğinde
+        connection.on("ReceiveNewAnswer", function (content, userName, userId) {
+            const newAnswer = `
+                        <div class="card mb-3 answer-card new-answer">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-user"></i> ${userName}
+                                        </small>
+                                        <small class="text-muted ms-2">
+                                            <i class="fas fa-calendar"></i> ${new Date().toLocaleString('tr-TR')}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        ${userId === '@Model.CreatedById' ? `
+                                            <button class="btn btn-sm btn-success" onclick="acceptAnswer(this)">
+                                                <i class="fas fa-check"></i> Kabul Et
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="answer-content">
+                                    ${content}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+            // Yeni cevabı container'a ekle
+            const answersContainer = document.getElementById('answersContainer');
+            answersContainer.insertAdjacentHTML('afterbegin', newAnswer);
+
+            // Yeni cevabı vurgula
+            const newAnswerElement = answersContainer.querySelector('.new-answer');
+            newAnswerElement.style.backgroundColor = '#f0f9ff';
+            setTimeout(() => {
+                newAnswerElement.style.backgroundColor = '';
+                newAnswerElement.classList.remove('new-answer');
+            }, 3000);
+
+            // Cevap sayısını güncelle
+            const answerCountBadge = document.querySelector('.badge');
+            if (answerCountBadge) {
+                const currentCount = parseInt(answerCountBadge.textContent);
+                answerCountBadge.textContent = currentCount + 1;
+            }
+        });
+
+        // Form submit
+        $('#answerForm').on('submit', function (e) {
+            e.preventDefault();
+
+            if (!isConnected) {
+                toastr.error('Bağlantı bekleniyor, lütfen biraz bekleyin.');
+                return;
+            }
+
+            const content = editor.getData();
+            if (!content || content.trim() === '') {
+                $('#content-error').show();
+                return;
+            }
+
+            const formData = new FormData(this);
+            formData.set('content', content);
+
+            $.ajax({
+                url: this.action,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        editor.setData('');
+                        $('#content-error').hide();
+                    } else {
+                        toastr.error(response.message);
+                    }
+                },
+                error: function () {
+                    toastr.error('Bir hata oluştu!');
+                }
+            });
+        });
+
+        // Sayfa kapanırken gruptan ayrıl
+        window.onbeforeunload = function () {
+            if (isConnected) {
+                connection.invoke("LeaveQuestionGroup", "@Model.Id");
+            }
+        };
+    </script>
+} 

@@ -1,0 +1,131 @@
+﻿@{
+    ViewData["Title"] = "Admin Dashboard";
+    Layout = "~/Views/Shared/_adminLayout.cshtml";
+}
+
+<div class="row mb-4">
+    <!-- İstatistik Kartları -->
+    <div class="col-md-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">Toplam Soru</h6>
+                        <h2 class="mb-0 mt-2" id="totalQuestions">-</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">Çözülen Sorular</h6>
+                        <h2 class="mb-0 mt-2" id="solvedQuestions">-</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">Toplam Üye</h6>
+                        <h2 class="mb-0 mt-2" id="totalUsers">-</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">Bu Hafta</h6>
+                        <h2 class="mb-0 mt-2" id="lastWeekQuestions">-</h2>
+                    </div>
+                    <div class="fs-1 opacity-50">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sayfanın en altına script ekleyin -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // İstatistikleri yükle
+        fetch('/Admin/GetDashboardStats')
+            .then(response => response.json())
+            .then(data => {
+                // Elementleri güncelle
+                document.getElementById('totalQuestions').textContent = data.totalQuestions;
+                document.getElementById('solvedQuestions').textContent = data.solvedQuestions;
+                document.getElementById('totalUsers').textContent = data.totalUsers;
+                document.getElementById('lastWeekQuestions').textContent = data.lastWeekQuestions;
+
+                // Sayıları animasyonlu göster
+                animateNumbers();
+            })
+            .catch(error => console.error('Hata:', error));
+    });
+
+    function animateNumbers() {
+        const elements = document.querySelectorAll('.card h2');
+        elements.forEach(element => {
+            const finalNumber = parseInt(element.textContent);
+            let currentNumber = 0;
+            const duration = 1000; // 1 saniye
+            const steps = 60;
+            const increment = finalNumber / steps;
+
+            const interval = setInterval(() => {
+                currentNumber += increment;
+                if (currentNumber >= finalNumber) {
+                    element.textContent = finalNumber;
+                    clearInterval(interval);
+                } else {
+                    element.textContent = Math.ceil(currentNumber);
+                }
+            }, duration / steps);
+        });
+    }
+</script>
+
+<style>
+    .card {
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .card .fs-1 {
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover .fs-1 {
+        transform: scale(1.2);
+    }
+ </style> 

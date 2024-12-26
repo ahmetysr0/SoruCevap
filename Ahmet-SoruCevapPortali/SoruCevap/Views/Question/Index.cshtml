@@ -1,0 +1,113 @@
+@model IEnumerable<Category>
+@{
+    ViewData["Title"] = "Soru Oluştur";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Yeni Soru Oluştur</h5>
+                </div>
+                <div class="card-body">
+                    <form id="questionForm">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Soru Başlığı</label>
+                            <input type="text" class="form-control" id="title" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="categoryId" class="form-label">Kategori</label>
+                            <select class="form-select" id="categoryId" required>
+                                <option value="">Kategori Seçin</option>
+                                @foreach (var category in Model)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="content" class="form-label">Soru İçeriği</label>
+                            <textarea class="form-control" id="content" rows="6" required></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="tags" class="form-label">Etiketler (virgülle ayırın)</label>
+                            <input type="text" class="form-control" id="tags" placeholder="örnek: c#, asp.net, entity-framework">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Soru Oluştur</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Soru Oluşturma Kuralları</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i> Sorunuzu açık ve anlaşılır yazın</li>
+                        <li><i class="fas fa-check text-success me-2"></i> Uygun kategoriyi seçin</li>
+                        <li><i class="fas fa-check text-success me-2"></i> İlgili etiketleri ekleyin</li>
+                        <li><i class="fas fa-check text-success me-2"></i> Kod örneklerini düzgün formatlayın</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#questionForm').on('submit', function(e) {
+                e.preventDefault();
+
+                var questionData = {
+                    title: $('#title').val(),
+                    content: $('#content').val(),
+                    categoryId: $('#categoryId').val(),
+                    tags: $('#tags').val()
+                };
+
+                $.ajax({
+                    url: '@Url.Action("CreateQuestion", "Question")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(questionData),
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Başarılı!',
+                                text: response.message,
+                                showConfirmButton: false,
+                                timer: 2000
+                            }).then(function() {
+                                window.location.href = '/Question/Index';
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Hata!',
+                                text: response.message
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Hata!',
+                            text: 'Bir hata oluştu. Lütfen tekrar deneyin.'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+} 

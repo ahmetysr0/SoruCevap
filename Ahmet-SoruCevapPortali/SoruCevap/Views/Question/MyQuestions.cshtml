@@ -1,0 +1,86 @@
+@model IEnumerable<Question>
+@{
+    ViewData["Title"] = "Sorularım";
+}
+
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Sorularım</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table" id="questionsTable">
+                    <thead>
+                        <tr>
+                            <th>Başlık</th>
+                            <th>Kategori</th>
+                            <th>Tarih</th>
+                            <th>Durum</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var question in Model)
+                        {
+                            <tr>
+                                <td>@question.Title</td>
+                                <td>@question.Category.Name</td>
+                                <td>@question.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    @switch (question.Status)
+                                    {
+                                        case QuestionStatus.Pending:
+                                            <span class="badge bg-warning">Onay Bekliyor</span>
+                                            break;
+                                        case QuestionStatus.Approved:
+                                            <span class="badge bg-success">Onaylandı</span>
+                                            break;
+                                        case QuestionStatus.Rejected:
+                                            <span class="badge bg-danger" 
+                                                  data-bs-toggle="tooltip" 
+                                                  title="@question.RejectionReason">
+                                                Reddedildi
+                                            </span>
+                                            break;
+                                    }
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="viewQuestion(@question.Id)">
+                                        <i class="fas fa-eye"></i> Görüntüle
+                                    </button>
+                                   
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Tooltip'leri aktifleştir
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            // DataTable'ı başlat
+            $('#questionsTable').DataTable({
+                "language": {
+                    "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Turkish.json"
+                },
+                "order": [[2, "desc"]] // Tarihe göre sırala
+            });
+        });
+
+        function viewQuestion(id) {
+            window.location.href = '/Question/Details/' + id;
+        }
+
+        function editQuestion(id) {
+            window.location.href = '/Question/Edit/' + id;
+        }
+    </script>
+} 
